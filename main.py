@@ -103,7 +103,8 @@ Wout_set = []
 
 s_set = []
 c = 0.5
-for i in range(50):
+number_Wout = 50
+for i in range(number_Wout):
     Wout = [[random.choice([0, -c, c]) for i in range(3)] for j in range(n)]
     Wout = np.reshape(Wout, (3,n))
     s = 0
@@ -114,7 +115,7 @@ for i in range(50):
     s_set.append(s)
     Wout_set.append(Wout)
 
-for i in range(20):
+for i in range(number_Wout):
     if s_set[i] == min(s_set):
         Wout = Wout_set[i]
     else:
