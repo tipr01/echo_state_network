@@ -1,13 +1,12 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import random
 import matplotlib.pyplot as plt
-import mpl_toolkits
-from reservoirpy.nodes import Reservoir, Ridge, Input
+
 
 
 def random_adjacency_matrix(n):
-    matrix = [[random.randint(0, 1) for i in range(n)] for j in range(n)]
+    matrix = np.random.choice([-1, 0, 1], size=(n, n), p=[0.05, 0.9, 0.05])
+    #np.random.uniform(-1, 1, size=(n, n))
 
     # No vertex connects to itself
     for i in range(n):
@@ -16,10 +15,18 @@ def random_adjacency_matrix(n):
     # If i is connected to j, j is connected to i
     for i in range(n):
         for j in range(n):
-            matrix[j][i] = matrix[i][j]
+            if np.abs(matrix[j][i]) == 1 or np.abs(matrix[i][j]) == 1:
+                if (i % 2) == 0:
+                    matrix[i][j], matrix[j, i] = 1, 1
+                else:
+                    matrix[i][j], matrix[j, i] = -1, -1
+            else:
+                matrix[i][j] = matrix[j][i]
 
     matrix = np.reshape(matrix, (n,n))
     return matrix
+
+
 
 
 #define lorenz system
@@ -42,11 +49,11 @@ a, b, c = 10.0, 30.0, 2
 x0 = np.array([0.0, 1.0, 1.0])
 
 #timedomain
-tmax = 20
+tmax = 50
 
-washout = 1000
+washout = 500
 training = 10000
-prediction = 1500
+prediction = 1000
 
 steps = washout + training
 t = np.linspace(0, tmax, steps)
@@ -83,56 +90,49 @@ ax.plot3D(xline, yline, zline, 'blue')
 
 
 
-n = 500
+n = 60
 
 
-r = np.random.rand(n, 1) * 100
-r = np.array(r)
+r = np.ones(n) #np.random.rand(n, 1) * 100
+#r = np.array(r)
 
 # Win = np.random.random((n, 3)) * 100
-Win = [[random.choice([0, -c, c]) for i in range(n)] for j in range(3)]
-Win = np.reshape(Win, (n,3))
+# Win = [[random.choice([0, -c, c]) for i in range(n)] for j in range(3)]
+# Win = np.reshape(Win, (n,3))
 
+Win = np.random.choice([0, 1], size=(n, 3), p=[0.7, 0.3]) #scs.random(n, 3, density=0.25, random_state=None) * 10
 W_r = random_adjacency_matrix(n)
-# Wout = np.random.random((3, n)) * 100
-
 W_r = (1 / np.max(np.linalg.eigvals(W_r))) * W_r
 
-l = 0.5
-Wout_set = []
+l = 1.0
 
-s_set = []
-c = 0.5
-number_Wout = 50
-for i in range(number_Wout):
-    Wout = [[random.choice([0, -c, c]) for i in range(3)] for j in range(n)]
-    Wout = np.reshape(Wout, (3,n))
-    s = 0
-    for k in range(washout):
-        r = (1 - l) * r + l * np.arctan(np.reshape(Win @ np.array([x[k], y[k], z[k]]), (n, 1)) + W_r @ r)
-        s = s + np.linalg.norm(np.array([x[k], y[k], z[k]]) - Wout @ r, None)
-
-    s_set.append(s)
-    Wout_set.append(Wout)
-
-for i in range(number_Wout):
-    if s_set[i] == min(s_set):
-        Wout = Wout_set[i]
-    else:
-        None
-
-# print(Wout)
+X = []
 
 for k in range(washout + training):
-    r = (1 - l) * r + l * np.arctan(np.reshape(Win @ np.array([x[k], y[k], z[k]]), (n, 1)) + W_r @ r)
+    r = (1 - l) * r + l * np.arctan(Win @ np.array([x[k], y[k], z[k]]) + W_r @ r)
+    X.append(r)
+
+X = np.array(X).reshape((n, washout + training))
+
+beta = 10
+Xtarget = [np.array([x[k], y[k], z[k]]) for k in range(washout + training)]
+Xtarget = np.array(Xtarget).T
+
+Wout = Xtarget @ X.T @ np.linalg.inv(X @ X.T + beta * np.identity(n))
+
+s = 0
+for k in range(washout):
+    r = (1 - l) * r + l * np.arctan(Win @ np.array([x[k], y[k], z[k]]) + W_r @ r)
+    s = s + np.linalg.norm(np.array([x[k], y[k], z[k]]) - (Wout @ r), None)
+print(s)
 
 x, y, z = [], [], []
 
 for k in range(prediction):
-    r = (1 - l) * r + l * np.arctan(np.reshape(Win @ (Wout @ r), (n, 1)) + W_r @ r)
-    x.append(float((Wout @ r)[0]))
-    y.append(float((Wout @ r)[1]))
-    z.append(float((Wout @ r)[2]))
+    r = (1 - l) * r + l * np.arctan(Win @ (Wout @ r) + W_r @ r)
+    x.append((Wout @ r)[0])
+    y.append((Wout @ r)[1])
+    z.append((Wout @ r)[2])
 
 
 
