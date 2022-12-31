@@ -3,10 +3,10 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
 
-
+#function that creates a random adjacency matrix with spectral radius less than 1
 def random_adjacency_matrix(n):
-    matrix = np.random.choice([-1, 0, 1], size=(n, n), p=[0.05, 0.9, 0.05])
-    #np.random.uniform(-1, 1, size=(n, n))
+    matrix = np.random.choice([-1, 0, 1], size=(n, n), p=[0.1, 0.8, 0.1])
+            #np.random.uniform(-1, 1, size=(n, n))
 
     # No vertex connects to itself
     for i in range(n):
@@ -24,11 +24,8 @@ def random_adjacency_matrix(n):
                 matrix[i][j] = matrix[j][i]
 
     matrix = np.reshape(matrix, (n,n))
+    matrix = (1 / np.max(np.linalg.eigvals(matrix))) * matrix
     return matrix
-
-
-
-
 #define lorenz system
 def lorenz(t, xyz, a, b, c):
     x = xyz
@@ -38,101 +35,97 @@ def lorenz(t, xyz, a, b, c):
     dxdt[2] = x[0] * x[1] - c * x[2]
     return dxdt
 
-
 #lorenz system parameters
 a, b, c = 10.0, 30.0, 2
 
-
-# sol = np.empty((steps+1, 3))
-
 #initial value
-x0 = np.array([0.0, 1.0, 1.0])
+x0 = np.array([1.0, 0.0, 0.0])
 
 #timedomain
-tmax = 50
+tmax = 20
 
+#values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 10000
-prediction = 1000
+prediction = 500
 
 steps = washout + training
+
+#timeaxis
 t = np.linspace(0, tmax, steps)
 
+#data creation
 sol = solve_ivp(lorenz, (0, tmax), x0, method='RK45', t_eval=t, args=(a, b, c))
 
-
-
-# print(time, '\n', x, y, z)
-
-
-
+#plot of the lorenz attractor
 time = np.array(sol.t)
 coo = np.array(sol.y)
 x, y, z = coo[0], coo[1], coo[2]
 
-# plt.plot(t, x, color='r', label='x')
-# plt.plot(t, y, color='g', label='y')
-# plt.plot(t, z, color='b', label='z')
-#
-# plt.show()
-
 plt.figure('lorenz solution')
-
 ax = plt.axes(projection='3d')
 
 # Data for a three-dimensional line
-xline = x
-yline = y
-zline = z
-ax.plot3D(xline, yline, zline, 'blue')
-
-# plt.show()
+ax.plot3D(x, y, z, 'blue')
 
 
+#implementation of the echo state network
 
-n = 60
+#reservoir size
+n = 100
 
+#initial value of the reservoir
+r = np.zeros(n)
 
-r = np.ones(n) #np.random.rand(n, 1) * 100
-#r = np.array(r)
+#random (input-) matrix that maps the data for every timestep into the reservoir
+Win = (np.random.rand(n,3) - 0.5) * 2
 
-# Win = np.random.random((n, 3)) * 100
-# Win = [[random.choice([0, -c, c]) for i in range(n)] for j in range(3)]
-# Win = np.reshape(Win, (n,3))
-
-Win = np.random.choice([0, 1], size=(n, 3), p=[0.7, 0.3]) #scs.random(n, 3, density=0.25, random_state=None) * 10
+#random adjacency matrix which connects some of the "reservoir points"
 W_r = random_adjacency_matrix(n)
-W_r = (1 / np.max(np.linalg.eigvals(W_r))) * W_r
 
-l = 1.0
+#leaking rate
+l = 0.8
 
+#creates matrix of reservoir states in training phase
 X = []
-
-for k in range(washout + training):
+for k in range(training):
     r = (1 - l) * r + l * np.arctan(Win @ np.array([x[k], y[k], z[k]]) + W_r @ r)
     X.append(r)
 
-X = np.array(X).reshape((n, washout + training))
+X = np.array(X).reshape((n, training))
 
-beta = 10
-Xtarget = [np.array([x[k], y[k], z[k]]) for k in range(washout + training)]
+#matrix of solutions in training phase
+Xtarget = [np.array([x[k], y[k], z[k]]) for k in range(training)]
 Xtarget = np.array(Xtarget).T
 
+
+#computation of the output matrix via ridge regression with regularization term beta
+beta = 1e-8
 Wout = Xtarget @ X.T @ np.linalg.inv(X @ X.T + beta * np.identity(n))
 
-s = 0
-for k in range(washout):
+#computation of the error
+# s = 0
+# for k in range(washout):
+#     r = (1 - l) * r + l * np.arctan(Win @ np.array([x[k], y[k], z[k]]) + W_r @ r)
+#     s = s + np.linalg.norm(np.array([x[k], y[k], z[k]]) - (Wout @ r), None)
+# print(s)
+
+r = np.zeros(n)
+
+for k in range(training):
     r = (1 - l) * r + l * np.arctan(Win @ np.array([x[k], y[k], z[k]]) + W_r @ r)
-    s = s + np.linalg.norm(np.array([x[k], y[k], z[k]]) - (Wout @ r), None)
-print(s)
+    print(Wout @ r)
 
-x, y, z = [], [], []
 
+
+R = []
 for k in range(prediction):
-    r = (1 - l) * r + l * np.arctan(Win @ (Wout @ r) + W_r @ r)
-    x.append((Wout @ r)[0])
-    y.append((Wout @ r)[1])
-    z.append((Wout @ r)[2])
+    r = (1 - l) * r + l *  np.arctan(Win @ (Wout @ r) + W_r @ r)
+    #print(Wout @ r)
+    R.append(r)
+
+X_pred = Wout @ np.array(R).reshape((n, prediction))
+
 
 
 
@@ -141,9 +134,9 @@ plt.figure('lorenz prediction')
 ax = plt.axes(projection='3d')
 
 # Data for a three-dimensional line
-xline = x
-yline = y
-zline = z
+xline = X_pred.T[0]
+yline = X_pred.T[1]
+zline = X_pred.T[2]
 ax.plot3D(xline, yline, zline, 'blue')
 
-plt.show()
+#plt.show()
