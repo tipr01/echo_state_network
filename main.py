@@ -11,7 +11,7 @@ tmax = 20
 #values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 1000
-prediction_time = 10 #time unit
+prediction_time = 20 #time unit
 
 #leaking rate
 l = 0.9
@@ -116,7 +116,9 @@ error = 101
 X_pred = 0
 count = 0
 
-while error > 100:
+# Due to the random choice of the matrices, the prediction in the "far" future fails more often,
+# so the whole ESN is implemented in a while loop that checks for the error.
+while error > 100 and count < 100:
     count += 1
 
     #initial value of the reservoir
