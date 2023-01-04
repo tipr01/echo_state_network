@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 n = 200
 
 #timedomain
-tmax = 40
+tmax = 20
 
 #values of numbers of washout-, training -and prediction phase
-washout = 50
+washout = 500
 training = 1000
-prediction_time = 5 #time unit
+prediction_time = 8 #time unit
 
 #leaking rate
 l = 0.9
@@ -94,11 +94,11 @@ print(np.shape(data[:, 0]))
 #extend solution
 xnew = data[:, -1]
 
-t = np.linspace(0, prediction_time, prediction)
+t = np.linspace(0, prediction_time, prediction + 1)
 sol = solve_ivp(lorenz, (0, prediction_time), xnew, method='RK45', t_eval=t, args=(a, b, c))
 
-time = np.array(sol.t)
-coo = np.array(sol.y)
+time = np.array(sol.t)[1:]
+coo = np.array(sol.y)[:, 1:]
 
 #
 #plt.plot(data.T, color='r', label='x')
@@ -119,116 +119,125 @@ ax.plot3D(*coo, 'blue')
 
 #implementation of the echo state network
 
-#initial value of the reservoir
-r = np.zeros(n)
+error = 200
+X_pred = 0
+count = 0
 
-#random (input-) matrix that maps the data for every timestep into the reservoir
-#Win = (np.random.rand(n, 3) - 0.5) * 2
-Win = np.random.uniform(-0.1, 0.1, size=(n, 3))
-#Win = np.array([np.identity(3) for i in range(n // 3)]).reshape((n, 3))
+while error > 100:
+    count += 1
+    #initial value of the reservoir
+    r = np.zeros(n)
 
-
-for i in range(n):
-    for j in range(3):
-        if np.random.random() < 2/3:
-            Win[i][j] = 0
-
-#random adjacency matrix which connects some of the "reservoir points"
-W_r = random_adjacency_matrix(n, density)
+    #random (input-) matrix that maps the data for every timestep into the reservoir
+    #Win = (np.random.rand(n, 3) - 0.5) * 2
+    Win = np.random.uniform(-0.1, 0.1, size=(n, 3))
+    #Win = np.array([np.identity(3) for i in range(n // 3)]).reshape((n, 3))
 
 
-for k in range(washout):
-    r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
+    for i in range(n):
+        for j in range(3):
+            if np.random.random() < 2/3:
+                Win[i][j] = 0
+
+    #random adjacency matrix which connects some of the "reservoir points"
+    W_r = random_adjacency_matrix(n, density)
 
 
-
-#creates matrix of reservoir states in training phase
-X = []
-print('Finding reservoir states...')
-perc = 0
-
-for k in range(washout, steps):
-    if ((k - washout) * 100) // training  > perc:
-        perc += 1
-        if perc % 10 == 0:
-            print(f"{perc // 10}", sep='', end='', flush=True)
-        else:
-            print("▮", sep='', end='', flush=True)
-        if perc == 99:
-            print('')
-
-    X.append(r)
-    r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
+    for k in range(washout):
+        r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
 
 
 
-print('Completed.')
-# plt.figure()
-# plt.plot([i for i in range(steps)], X)
-# plt.show()
+    #creates matrix of reservoir states in training phase
+    X = []
+    print('Finding reservoir states...')
+    perc = 0
 
-print(np.shape(X))
+    for k in range(washout, steps):
+        if ((k - washout) * 100) // training  > perc:
+            perc += 1
+            if perc % 10 == 0:
+                print(f"{perc // 10}", sep='', end='', flush=True)
+            else:
+                print("▮", sep='', end='', flush=True)
+            if perc == 99:
+                print('')
 
-X = np.array(X).T
-
-#matrix of solutions in training phase
-Xtarget = data[:, washout:steps]
-
-print(np.shape(Xtarget))
-
-#computation of the output matrix via ridge regression with regularization term beta
-# beta = 1e-12
-# Wout = Xtarget @ X.T @ np.linalg.inv(X @ X.T + beta * np.identity(n))
-
-#print(np.linalg.norm(Wout @ X - Xtarget))
-
-# Xtarget = Wout @ X
-Wout = np.linalg.lstsq(X.T, Xtarget.T, rcond=None)[0]
-Wout = Wout.T
-
-print(np.linalg.norm(Wout @ X - Xtarget))
-#
-# #computation of the error
-# s = 0
-# r = np.zeros(n)
-# for k in range(washout):
-#     r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
-#     s = s + np.linalg.norm(data[:, k] - (Wout @ r), None) ** 2
-# print(s)
-#
-# r = np.zeros(n)
-#
-# for k in range(training):
-#     r = (1 - l) * r + l * np.arctan(Win @ data[:, k] + W_r @ r)
-#     #print(Wout @ r)
+        X.append(r)
+        r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
 
 
-print('generating prediction...')
 
-R = []
-perc = 0
-for k in range(prediction):
-    if (k * 100) // prediction  > perc:
-        perc += 1
-        if perc % 10 == 0:
-            print("|", sep='', end='', flush=True)
-        else:
-            print("▮", sep='', end='', flush=True)
-        if perc == 99:
-            print('')
+    print('Completed.')
+    # plt.figure()
+    # plt.plot([i for i in range(steps)], X)
+    # plt.show()
 
-    # r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
-    print(data[:, k], Wout @ r)
-    R.append(r)
-    r = (1 - l) * r + l * act(Win @ (Wout @ r) + W_r @ r)
-    #print(Wout @ r)
+    print(np.shape(X))
+
+    X = np.array(X).T
+
+    #matrix of solutions in training phase
+    Xtarget = data[:, washout:steps]
+
+    print(np.shape(Xtarget))
+
+    #computation of the output matrix via ridge regression with regularization term beta
+    # beta = 1e-12
+    # Wout = Xtarget @ X.T @ np.linalg.inv(X @ X.T + beta * np.identity(n))
+
+    #print(np.linalg.norm(Wout @ X - Xtarget))
+
+    # Xtarget = Wout @ X
+    Wout = np.linalg.lstsq(X.T, Xtarget.T, rcond=None)[0]
+    Wout = Wout.T
+
+    print(np.linalg.norm(Wout @ X - Xtarget))
+    #
+    # #computation of the error
+    # s = 0
+    # r = np.zeros(n)
+    # for k in range(washout):
+    #     r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
+    #     s = s + np.linalg.norm(data[:, k] - (Wout @ r), None) ** 2
+    # print(s)
+    #
+    # r = np.zeros(n)
+    #
+    # for k in range(training):
+    #     r = (1 - l) * r + l * np.arctan(Win @ data[:, k] + W_r @ r)
+    #     #print(Wout @ r)
 
 
-print('end prediction')
-R = np.array(R).T
+    print('generating prediction...')
 
-X_pred = Wout @ R
+    R = []
+    perc = 0
+    for k in range(prediction):
+        if (k * 100) // prediction  > perc:
+            perc += 1
+            if perc % 10 == 0:
+                print("|", sep='', end='', flush=True)
+            else:
+                print("▮", sep='', end='', flush=True)
+            if perc == 99:
+                print('')
 
+        # r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
+        #print(data[:, k], Wout @ r)
+        R.append(r)
+        r = (1 - l) * r + l * act(Win @ (Wout @ r) + W_r @ r)
+        #print(Wout @ r)
+
+
+    print('end prediction')
+    R = np.array(R).T
+
+    X_pred = Wout @ R
+
+    error = max(np.linalg.norm(X_pred, axis=0))
+
+print(f'Number of tries: {count}')
 
 # for i in range(prediction):
 #     print(X_pred[i])
@@ -248,17 +257,14 @@ ax.plot3D(xline, yline, zline, 'red')
 
 plt.figure('coordinates')
 
-plt.plot(t, coo[0], color='r', label='x')
-plt.plot(t, coo[1], color='g', label='y')
-plt.plot(t, coo[2], color='b', label='z')
+plt.plot(time, coo[0], color='r', label='x')
+plt.plot(time, coo[1], color='g', label='y')
+plt.plot(time, coo[2], color='b', label='z')
 
-plt.plot(t, xline, 'r--', label='x_pred', )
-plt.plot(t, yline, 'g--', label='y_pred')
-plt.plot(t, zline, 'b--', label='z_pred')
+plt.plot(time, xline, 'r--', label='x_pred', )
+plt.plot(time, yline, 'g--', label='y_pred')
+plt.plot(time, zline, 'b--', label='z_pred')
 
 plt.legend()
-
-plt.show()
-
 
 plt.show()
