@@ -1,8 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-import space
-
 
 #reservoir size
 n = 100
@@ -13,19 +11,22 @@ tmax = 20
 #values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 1000
-prediction_time = 8 #time unit
+prediction_time = 10 #time unit
 
 #leaking rate
 l = 0.9
 
+#spectral radius of W_r
 lmd = 10
+
+#density of W_r
 density = 0.1
 
-
+# activation function
 def act(x):
     return np.tanh(x)
 
-#function that creates a random adjacency matrix with spectral radius less than 1
+#function that creates a random adjacency matrix W_r with spectral radius less than lmd
 def random_adjacency_matrix(n, p):
     # matrix = np.random.choice([-1, 0, 1], size=(n, n), p=[0, 0.9, 0.1])
     matrix = np.random.uniform(-1, 1, size=(n, n))
@@ -52,13 +53,14 @@ def random_adjacency_matrix(n, p):
     #             matrix[i][j] = matrix[j][i]
 
     # matrix = np.reshape(matrix, (n,n))
-    # set spectral radius to a constant near 1, less than 1 ensures the echo state property
 
+
+    # set spectral radius to a constant near 1, less than 1 ensures the echo state property
     matrix = (lmd / np.max(np.real(np.linalg.eigvals(matrix)))) * matrix
     return matrix
 
 
-#define lorenz system
+#definition of the lorenz system
 def lorenz(t, xyz, a, b, c):
     x = xyz
     dxdt = np.empty(3)
@@ -73,7 +75,7 @@ a, b, c = 10.0, 30.0, 2
 #initial value
 x0 = np.array([1.0, 0.0, 0.0])
 
-
+# computation of stepsizes
 steps = washout + training
 prediction = int((steps / tmax) * prediction_time)
 
@@ -82,21 +84,17 @@ t = np.linspace(0, tmax, steps)
 
 #data creation
 sol = solve_ivp(lorenz, (0, tmax), x0, method='RK45', t_eval=t, args=(a, b, c))
-
-#plot of the lorenz attractor
 time = np.array(sol.t)
 data = np.array(sol.y)
 x, y, z = data
 
-
+#plot of the lorenz attractor
 fig = plt.figure('lorenz system prediction', figsize=plt.figaspect(0.5))
-manager =  plt.get_current_fig_manager()
+# manager =  plt.get_current_fig_manager()
 ax = fig.add_subplot(1, 2, 1, projection='3d')
 
 ax.plot3D(*data, 'blue')
 ax.set_title('solution')
-
-
 
 #extend solution
 xnew = data[:, -1]
@@ -107,29 +105,28 @@ sol = solve_ivp(lorenz, (0, prediction_time), xnew, method='RK45', t_eval=t, arg
 time = np.array(sol.t)[1:]
 coo = np.array(sol.y)[:, 1:]
 
-
+#plot of the extended solution
 ax = fig.add_subplot(1, 2, 2, projection='3d')
 ax.set_title('prediction')
-ax.plot3D(*coo, 'green', label='solution of prediction time')
+ax.plot3D(*coo, 'green', label='solve_ivp solution')
 
 
 #implementation of the echo state network
-
-error = 200
+error = 101
 X_pred = 0
 count = 0
 
 while error > 100:
     count += 1
+
     #initial value of the reservoir
     r = np.zeros(n)
 
     #random (input-) matrix that maps the data for every timestep into the reservoir
+
     #Win = (np.random.rand(n, 3) - 0.5) * 2
     Win = np.random.uniform(-0.1, 0.1, size=(n, 3))
     #Win = np.array([np.identity(3) for i in range(n // 3)]).reshape((n, 3))
-
-
     for i in range(n):
         for j in range(3):
             if np.random.random() < 2/3:
@@ -138,15 +135,12 @@ while error > 100:
     #random adjacency matrix which connects some of the "reservoir points"
     W_r = random_adjacency_matrix(n, density)
 
-
     for k in range(washout):
         r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
 
-
-
     #creates matrix of reservoir states in training phase
     X = []
-    print('Finding reservoir states...')
+    print('Computing reservoir states in training phase...')
     perc = 0
 
     for k in range(washout, steps):
@@ -161,51 +155,23 @@ while error > 100:
 
         X.append(r)
         r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
-
-
-
     print('Completed.')
-    # plt.figure()
-    # plt.plot([i for i in range(steps)], X)
-    # plt.show()
-
-    print(np.shape(X))
 
     X = np.array(X).T
 
     #matrix of solutions in training phase
     Xtarget = data[:, washout:steps]
 
-    print(np.shape(Xtarget))
-
-    #computation of the output matrix via ridge regression with regularization term beta
+    #computation of the output matrix via ridge regression with regularization term beta (worse than numpy)
     # beta = 1e-12
     # Wout = Xtarget @ X.T @ np.linalg.inv(X @ X.T + beta * np.identity(n))
 
-    #print(np.linalg.norm(Wout @ X - Xtarget))
-
-    # Xtarget = Wout @ X
+    # computation of the output matrix via numpy least squares
     Wout = np.linalg.lstsq(X.T, Xtarget.T, rcond=None)[0]
     Wout = Wout.T
 
-    print(np.linalg.norm(Wout @ X - Xtarget))
-    #
-    # #computation of the error
-    # s = 0
-    # r = np.zeros(n)
-    # for k in range(washout):
-    #     r = (1 - l) * r + l * act(Win @ data[:, k] + W_r @ r)
-    #     s = s + np.linalg.norm(data[:, k] - (Wout @ r), None) ** 2
-    # print(s)
-    #
-    # r = np.zeros(n)
-    #
-    # for k in range(training):
-    #     r = (1 - l) * r + l * np.arctan(Win @ data[:, k] + W_r @ r)
-    #     #print(Wout @ r)
-
-
-    print('generating prediction...')
+    #print(np.linalg.norm(Wout @ X - Xtarget))
+    print('Generating prediction...')
 
     R = []
     perc = 0
@@ -213,7 +179,7 @@ while error > 100:
         if (k * 100) // prediction  > perc:
             perc += 1
             if perc % 10 == 0:
-                print("|", sep='', end='', flush=True)
+                print(f"{perc // 10}", sep='', end='', flush=True)
             else:
                 print("▮", sep='', end='', flush=True)
             if perc == 99:
@@ -225,8 +191,9 @@ while error > 100:
         r = (1 - l) * r + l * act(Win @ (Wout @ r) + W_r @ r)
         #print(Wout @ r)
 
+    print('Prediction completed.')
 
-    print('end prediction')
+
     R = np.array(R).T
 
     X_pred = Wout @ R
@@ -235,26 +202,18 @@ while error > 100:
 
 print(f'Number of tries: {count}')
 
-# for i in range(prediction):
-#     print(X_pred[i])
-#[print(col) for col in X_pred.T]
-
-
-
-# plt.figure('lorenz prediction')
-
-# ax = plt.axes(projection='3d')
 
 # Data for a three-dimensional line
 xline = X_pred[0]
 yline = X_pred[1]
 zline = X_pred[2]
+
+#plot of the lorenz system prediction
 ax.plot3D(xline, yline, zline, 'red', label='esn prediction')
-move_figure("right")
 
 plt.legend()
 
-ax = fig.add_subplot()
+plt.figure('individual trajectories')
 
 plt.plot(time, coo[0], color='r', label='x')
 plt.plot(time, coo[1], color='g', label='y')
