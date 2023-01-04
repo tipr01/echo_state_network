@@ -1,9 +1,11 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
+import space
+
 
 #reservoir size
-n = 200
+n = 100
 
 #timedomain
 tmax = 20
@@ -51,6 +53,7 @@ def random_adjacency_matrix(n, p):
 
     # matrix = np.reshape(matrix, (n,n))
     # set spectral radius to a constant near 1, less than 1 ensures the echo state property
+
     matrix = (lmd / np.max(np.real(np.linalg.eigvals(matrix)))) * matrix
     return matrix
 
@@ -86,10 +89,14 @@ data = np.array(sol.y)
 x, y, z = data
 
 
-# x, y, z = np.array(x), np.array(y), np.array(z)
+fig = plt.figure('lorenz system prediction', figsize=plt.figaspect(0.5))
+manager =  plt.get_current_fig_manager()
+ax = fig.add_subplot(1, 2, 1, projection='3d')
 
-#data = np.array([x, y, z])
-print(np.shape(data[:, 0]))
+ax.plot3D(*data, 'blue')
+ax.set_title('solution')
+
+
 
 #extend solution
 xnew = data[:, -1]
@@ -100,21 +107,10 @@ sol = solve_ivp(lorenz, (0, prediction_time), xnew, method='RK45', t_eval=t, arg
 time = np.array(sol.t)[1:]
 coo = np.array(sol.y)[:, 1:]
 
-#
-#plt.plot(data.T, color='r', label='x')
-# plt.plot(t, coo[0], color='r', label='x')
-# plt.plot(t, coo[1], color='g', label='y')
-# plt.plot(t, coo[2], color='b', label='z')
-#
-# plt.show()
 
-
-plt.figure('lorenz solution')
-ax = plt.axes(projection='3d')
-
-# Data for a three-dimensional line
-# ax.plot3D(*data, 'blue')
-ax.plot3D(*coo, 'blue')
+ax = fig.add_subplot(1, 2, 2, projection='3d')
+ax.set_title('prediction')
+ax.plot3D(*coo, 'green', label='solution of prediction time')
 
 
 #implementation of the echo state network
@@ -253,9 +249,12 @@ print(f'Number of tries: {count}')
 xline = X_pred[0]
 yline = X_pred[1]
 zline = X_pred[2]
-ax.plot3D(xline, yline, zline, 'red')
+ax.plot3D(xline, yline, zline, 'red', label='esn prediction')
+move_figure("right")
 
-plt.figure('coordinates')
+plt.legend()
+
+ax = fig.add_subplot()
 
 plt.plot(time, coo[0], color='r', label='x')
 plt.plot(time, coo[1], color='g', label='y')
