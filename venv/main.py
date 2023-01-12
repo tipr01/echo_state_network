@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.stats import wasserstein_distance
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import space as spc
@@ -28,13 +29,8 @@ density = 0.1
 a, b, c = 10.0, 30.0, 2
 
 #critical points
-
 crit_pnt1 = np.array([np.sqrt(c * (b - 1)), np.sqrt(c * (b - 1)), b-1])
 crit_pnt2 = np.array([ - np.sqrt(c * (b - 1)), - np.sqrt(c * (b - 1)), b-1])
-# crit_pnt1 = str(crit_pnt1)
-# crit_pnt2 = str(crit_pnt2)
-
-# print(crit_pnt1, crit_pnt2)
 
 #initial value
 x0 = np.array([1.0, 0.0, 0.0])
@@ -57,7 +53,6 @@ x, y, z = data
 linewidth = 0.8
 
 fig = plt.figure('lorenz system prediction', figsize=plt.figaspect(0.5))
-# manager =  plt.get_current_fig_manager()
 ax = fig.add_subplot(1, 2, 1, projection='3d')
 
 ax.plot3D(*data, 'blue', linewidth=linewidth)
@@ -139,8 +134,8 @@ while norm > 100 and count < 100:
     Wout = Xtarget @ X.T @ np.linalg.inv(X @ X.T + beta * np.identity(n))
 
     # computation of the output matrix via numpy least squares
-    #Wout = np.linalg.lstsq(X.T, Xtarget.T, rcond=None)[0]
-    #Wout = Wout.T
+    # Wout = np.linalg.lstsq(X.T, Xtarget.T, rcond=None)[0]
+    # Wout = Wout.T
 
     #print(np.linalg.norm(Wout @ X - Xtarget))
     print('Generating prediction...')
@@ -167,9 +162,10 @@ while norm > 100 and count < 100:
 
     R = np.array(R).T
 
+    # prediction matrix in which columns the predicted coordinates are contained
     X_pred = Wout @ R
 
-
+    # computation of the error with respect to the right trajectory (2-norm)
     error = []
     nmse = 0
     for i in range(prediction):
@@ -179,12 +175,7 @@ while norm > 100 and count < 100:
 
     nmse = (1 / prediction) * nmse
 
-    frechet_var1 = np.sum([np.linalg.norm(crit_pnt1 - X_pred.T[k]) ** 2 for k in range(prediction)])
-    frechet_var2 = np.sum([np.linalg.norm(crit_pnt2 - X_pred.T[k]) ** 2 for k in range(prediction)])
-
-    print(f'Frechet variance 1: {frechet_var1}')
-    print(f'Frechet variance 2: {frechet_var2}')
-
+    # checking the error
     norm = max(np.linalg.norm(X_pred, axis=0))
 
     # integrating testfunction with respect to the measure...
@@ -195,10 +186,12 @@ while norm > 100 and count < 100:
     iterable = (spc.test_func(X_pred[:, i], pas, normal, const) - spc.test_func(coo[:, i], pas, normal, const) for i in  range(prediction))
     integral = 1 / prediction * np.abs(np.sum(np.fromiter(iterable, dtype=float)))
 
-    print(f'integral: {integral}')
 
-print(f'normalized mean squared error: {nmse}')
-print(f'Number of tries: {count}')
+print(f'- normalized mean squared error: {nmse}')
+print(f'- number of tries: {count}')
+print(f'- integral: {integral}')
+
+
 
 # Data for a three-dimensional line
 xline = X_pred[0]
@@ -230,23 +223,40 @@ x = -(normal[1] * y + normal[2] * z - d) * 1 / normal[0]
 # plot the surface
 
 ax.plot_surface(x, y, z, alpha=0.4, color='blue')
-plt.show()
 
 
-# plt.figure('individual trajectories')
-#
-# plt.plot(time, coo[0], color='r', label='x')
-# plt.plot(time, coo[1], color='g', label='y')
-# plt.plot(time, coo[2], color='b', label='z')
-#
-# plt.plot(time, xline, 'r--', label='x_pred', )
-# plt.plot(time, yline, 'g--', label='y_pred')
-# plt.plot(time, zline, 'b--', label='z_pred')
-#
+
+fig2 = plt.figure('additional information')
+
+ax = fig2.add_subplot(2, 2, 1)
+ax.set_title('test_func')
+
+tstf = [spc.test_func(X_pred[:, i], pas, normal, const) for i in range(prediction)]
+#wasserstein = [wasserstein_distance(X_pred[:, i], coo[:, i]) for i in range(prediction)]
+
+ax.plot(time, tstf, label='test function')
+#ax.plot(time, wasserstein, label='wasserstein distance')
+
 # plt.legend()
-#
-#
-# plt.figure('error')
-# plt.plot(time, error, label='error')
 
-# plt.show()
+
+ax = fig2.add_subplot(2, 2, 2)
+
+ax.set_title('error')
+ax.plot(time, error, label='error')
+
+ax = fig2.add_subplot(2, 1, 2)
+ax.set_title('individual trajectories')
+
+ax.plot(time, coo[0], color='r', label='x')
+ax.plot(time, coo[1], color='g', label='y')
+ax.plot(time, coo[2], color='b', label='z')
+
+ax.plot(time, xline, 'r--', label='x_pred')
+ax.plot(time, yline, 'g--', label='y_pred')
+ax.plot(time, zline, 'b--', label='z_pred')
+
+plt.legend()
+
+
+plt.show()
