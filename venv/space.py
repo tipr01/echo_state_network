@@ -51,3 +51,11 @@ def lorenz(t, xyz, a, b, c):
     dxdt[2] = x[0] * x[1] - c * x[2]
     return dxdt
 
+
+def nonlin(x):
+    return x / (1 + x)
+
+
+
+def test_func(x, b, normal, c):
+    return 2 / np.pi * np.arctan(c * np.dot(normal, x - b))

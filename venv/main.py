@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import space as spc
 
 #reservoir size
@@ -12,7 +13,7 @@ tmax = 20
 #values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 1000
-prediction_time = 10 #time unit
+prediction_time = 500 #time unit
 
 #leaking rate
 l = 0.9
@@ -170,26 +171,34 @@ while norm > 100 and count < 100:
 
 
     error = []
+    nmse = 0
     for i in range(prediction):
-        error.append(np.linalg.norm(X_pred[:, i] - coo[:, i]))
+        diff = np.linalg.norm(X_pred[:, i] - coo[:, i])
+        nmse = nmse + ((diff ** 2) / np.linalg.norm(coo[:, i]) ** 2 )
+        error.append(diff)
 
+    nmse = (1 / prediction) * nmse
 
     frechet_var1 = np.sum([np.linalg.norm(crit_pnt1 - X_pred.T[k]) ** 2 for k in range(prediction)])
     frechet_var2 = np.sum([np.linalg.norm(crit_pnt2 - X_pred.T[k]) ** 2 for k in range(prediction)])
 
-    print(frechet_var1)
-    print(frechet_var2)
+    print(f'Frechet variance 1: {frechet_var1}')
+    print(f'Frechet variance 2: {frechet_var2}')
 
     norm = max(np.linalg.norm(X_pred, axis=0))
 
+    # integrating testfunction with respect to the measure...
+    normal = crit_pnt2 - crit_pnt1
+    point_at_surface = np.array([0, 0, b - 1])
+    pas = point_at_surface
+    const = 0.5
+    iterable = (spc.test_func(X_pred[:, i], pas, normal, const) - spc.test_func(coo[:, i], pas, normal, const) for i in  range(prediction))
+    integral = 1 / prediction * np.abs(np.sum(np.fromiter(iterable, dtype=float)))
+
+    print(f'integral: {integral}')
+
+print(f'normalized mean squared error: {nmse}')
 print(f'Number of tries: {count}')
-
-plt.figure('error')
-plt.plot(time, error, label='error')
-
-
-
-
 
 # Data for a three-dimensional line
 xline = X_pred[0]
@@ -203,8 +212,27 @@ ax.plot(*crit_pnt1, 'fuchsia', marker='o', markersize=2)
 ax.plot(*crit_pnt2, 'fuchsia', marker='o', markersize=2)
 
 
-plt.legend()
-#
+
+point  = np.array([0, 0, b - 1])
+normal = crit_pnt2 - crit_pnt1
+
+# a plane is a*x+b*y+c*z+d=0
+# [a,b,c] is the normal. Thus, we have to calculate
+# d and we're set
+d = point.dot(normal)
+
+# create x,y
+y, z = np.meshgrid(range(-20, 20), range(60))
+
+# calculate corresponding z
+x = -(normal[1] * y + normal[2] * z - d) * 1 / normal[0]
+
+# plot the surface
+
+ax.plot_surface(x, y, z, alpha=0.4, color='blue')
+plt.show()
+
+
 # plt.figure('individual trajectories')
 #
 # plt.plot(time, coo[0], color='r', label='x')
@@ -216,5 +244,9 @@ plt.legend()
 # plt.plot(time, zline, 'b--', label='z_pred')
 #
 # plt.legend()
+#
+#
+# plt.figure('error')
+# plt.plot(time, error, label='error')
 
-plt.show()
+# plt.show()
