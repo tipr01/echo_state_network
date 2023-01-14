@@ -2,7 +2,6 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.stats import wasserstein_distance
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import space as spc
 
 #reservoir size
@@ -204,27 +203,18 @@ ax.plot3D(xline, yline, zline, 'red', label='esn prediction', linewidth=linewidt
 ax.plot(*crit_pnt1, 'fuchsia', marker='o', markersize=2)
 ax.plot(*crit_pnt2, 'fuchsia', marker='o', markersize=2)
 
-
-
 point  = np.array([0, 0, b - 1])
 normal = crit_pnt2 - crit_pnt1
-
-# a plane is a*x+b*y+c*z+d=0
-# [a,b,c] is the normal. Thus, we have to calculate
-# d and we're set
 d = point.dot(normal)
 
-# create x,y
+# create y and z
 y, z = np.meshgrid(range(-20, 20), range(60))
 
-# calculate corresponding z
+# calculate corresponding x
 x = -(normal[1] * y + normal[2] * z - d) * 1 / normal[0]
 
 # plot the surface
-
 ax.plot_surface(x, y, z, alpha=0.4, color='blue')
-
-
 
 fig2 = plt.figure('additional information')
 
