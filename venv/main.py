@@ -12,8 +12,9 @@ tmax = 20
 
 #values of numbers of washout-, training -and prediction phase
 washout = 500
-training = 1000
+training = 500
 prediction_time = 500 #time unit
+
 
 #leaking rate
 l = 0.9
@@ -188,7 +189,8 @@ while norm > 100 and count < 100:
 
 print(f'- normalized mean squared error: {nmse}')
 print(f'- number of tries: {count}')
-print(f'- integral: {integral}')
+print(f'- integral of the testfunction with respect to mu - nu: {integral}')
+
 
 
 
@@ -216,10 +218,13 @@ x = -(normal[1] * y + normal[2] * z - d) * 1 / normal[0]
 # plot the surface
 ax.plot_surface(x, y, z, alpha=0.4, color='blue')
 
+
+plt.legend()
+
 fig2 = plt.figure('additional information')
 
 ax = fig2.add_subplot(2, 2, 1)
-ax.set_title('test_func')
+ax.set_title('test function')
 
 tstf = [spc.test_func(X_pred[:, i], pas, normal, const) for i in range(prediction)]
 #wasserstein = [wasserstein_distance(X_pred[:, i], coo[:, i]) for i in range(prediction)]
@@ -232,7 +237,7 @@ ax.plot(time, tstf, label='test function')
 
 ax = fig2.add_subplot(2, 2, 2)
 
-ax.set_title('error')
+ax.set_title('error wrt time (2-norm)')
 ax.plot(time, error, label='error')
 
 ax = fig2.add_subplot(2, 1, 2)
