@@ -13,11 +13,11 @@ tmax = 20
 #values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 1000
-prediction_time = 15 #time unit
+prediction_time = 100 #time unit
 
 
 #leaking rate
-l = 0.9
+l = 1.0
 
 #spectral radius of W_r
 lmd = 10
@@ -65,9 +65,10 @@ ax.set_title('solution')
 #extend solution
 xnew = data[:, -1]
 
+print('x')
 t = np.linspace(0, prediction_time, prediction + 1)
 sol = solve_ivp(spc.lorenz, (0, prediction_time), xnew, method='RK45', t_eval=t, args=(a, b, c))
-
+print('x')
 time = np.array(sol.t)[1:]
 coo = np.array(sol.y)[:, 1:]
 
@@ -101,7 +102,8 @@ while norm > 100 and count < 100:
                 Win[i][j] = 0
 
     #random adjacency matrix which connects some of the "reservoir points"
-    W_r = spc.random_adjacency_matrix(n, density, lmd)
+    W_r = np.zeros((n, n), int)  # spc.random_adjacency_matrix(n, density, lmd)
+    np.fill_diagonal(W_r, 5)
 
     for k in range(washout):
         r = (1 - l) * r + l * spc.act(Win @ data[:, k] + W_r @ r)
@@ -137,7 +139,7 @@ while norm > 100 and count < 100:
     # Wout = np.linalg.lstsq(X.T, Xtarget.T, rcond=None)[0]
     # Wout = Wout.T
 
-    #print(np.linalg.norm(Wout @ X - Xtarget))
+    print(np.linalg.norm(Wout @ X - Xtarget))
     print('Generating prediction...')
 
     R = []
@@ -183,13 +185,19 @@ while norm > 100 and count < 100:
     point_at_surface = np.array([0, 0, b - 1])
     pas = point_at_surface
     const = 0.5
-    iterable = (spc.test_func(X_pred[:, i], pas, normal, const) - spc.test_func(coo[:, i], pas, normal, const) for i in  range(prediction))
-    integral = 1 / prediction * np.abs(np.sum(np.fromiter(iterable, dtype=float)))
+    iterable1 = [spc.test_func(X_pred[:, i], pas, normal, const)  for i in  range(prediction)]
+    iterable2 = [spc.test_func(coo[:, i], pas, normal, const) for i in range(prediction)]
+
+    integral1 = 1 / prediction * np.sum(iterable1)
+    integral2 = 1 / prediction * np.sum(iterable2)
+
+    print(np.mean(integral1), np.mean(integral2))
+
 
 
 print(f'- normalized mean squared error: {nmse}')
 print(f'- number of tries: {count}')
-print(f'- integral of the testfunction with respect to mu - nu: {integral}')
+print(f'- integral of the testfunction wrt mu, nu: {integral1, integral2}')
 
 
 

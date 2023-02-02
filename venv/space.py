@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-
+import random
 
 
 #activation function
@@ -53,9 +53,7 @@ def lorenz(t, xyz, a, b, c):
 
 
 def nonlin(x):
-    return x / (1 + x)
-
-
+    return x / (1 + np.abs(x))
 
 def test_func(x, b, normal, c):
     return 2 / np.pi * np.arctan(c * np.dot(normal, x - b))

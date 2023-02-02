@@ -6,28 +6,28 @@ import space as spc
 
 
 #reservoir size
-n = 300
+n = 100
 
 #timedomain
-tmax = 20
+tmax = 50
 
 #values of numbers of washout-, training -and prediction phase
-washout = 200
-training = 500
-prediction_time = 1 #time unit
+washout = 500
+training = 1000
+prediction_time = 10 #time unit
 
 #constant K
-K = 1
+K = 0.1
 
 # distance of steps we want to use from the past
-m = n - 1
+m = n
 
 #lorenz system parameters
 a, b, c = 10.0, 30.0, 2
 
 #critical points
-crit_pnt1 = np.array([np.sqrt(c * (b - 1)), np.sqrt(c * (b - 1)), b-1])
-crit_pnt2 = np.array([ - np.sqrt(c * (b - 1)), - np.sqrt(c * (b - 1)), b-1])
+crit_pnt1 = np.array([np.sqrt(c * (b - 1)), np.sqrt(c * (b - 1)), b - 1])
+crit_pnt2 = np.array([ - np.sqrt(c * (b - 1)), - np.sqrt(c * (b - 1)), b - 1])
 
 #initial value
 x0 = np.array([1.0, 0.0, 0.0])
@@ -44,6 +44,8 @@ sol = solve_ivp(spc.lorenz, (0, tmax), x0, method='RK45', t_eval=t, args=(a, b, 
 time = np.array(sol.t)
 data = np.array(sol.y)
 x, y, z = data
+
+#print(data)
 
 
 #plot of the lorenz attractor
@@ -68,89 +70,90 @@ sol = solve_ivp(spc.lorenz, (0, prediction_time), xnew, method='RK45', t_eval=t,
 
 time = np.array(sol.t)[1:]
 coo = np.array(sol.y)[:, 1:]
+c1, c2, c3 = coo
 
 #plot of the extended solution
 ax = fig.add_subplot(1, 2, 2, projection='3d')
 ax.set_title('prediction')
 ax.plot3D(*coo, 'green', label='solve_ivp solution', linewidth=linewidth)
 
-X_wash = np.empty((n, washout))
-Y_wash = np.empty((n, washout))
-Z_wash = np.empty((n, washout))
+norm = 101
+count = 0
 
-map = np.random.uniform(1, 10, size=n)
+while norm > 100 and count < 100:
+    count += 1
 
-reservoir_iv = np.ones(n) # np.random.uniform(0, 1, size=n)
-X_wash[:, 0] = reservoir_iv
-Y_wash[:, 0] = reservoir_iv
-Z_wash[:, 0] = reservoir_iv
+    map = np.random.uniform(-0.2, 0.2, size=(n, 3))
+    for i in range(n):
+        for j in range(3):
+            if np.random.random() < 2/3:
+                map[i][j] = 0
 
-for i in range(1, washout):
-    for k in range(n):
-        X_wash[k, i] = spc.nonlin(K * X_wash[k - m, i] + x[i] * map[k])
-        Y_wash[k, i] = spc.nonlin(K * Y_wash[k - m, i] + y[i] * map[k])
-        Z_wash[k, i] = spc.nonlin(K * Z_wash[k - m, i] + z[i] * map[k])
+    reservoir = np.zeros(n) # np.random.uniform(0, 1, size=n)
 
-X = np.zeros((n, training))
-Y = np.zeros((n, training))
-Z = np.zeros((n, training))
+    j = 1
+    for i in range(n, n * washout):
+        if i // n > j:
+            j += 1
+        k = i % n
+        reservoir = np.append(reservoir, spc.nonlin(K * reservoir[i - m] + data[:, j].T @ map[k, :]))
 
-X[:, 0] = X_wash[:, -1]
-Y[:, 0] = Y_wash[:, -1]
-Z[:, 0] = Z_wash[:, -1]
+    for i in range(n * washout, n * steps):
+        if i // n > j:
+            j += 1
+        k = i % n
+        reservoir = np.append(reservoir, spc.nonlin(K * reservoir[i - m] + data[:, j].T @ map[k, :]))
 
-for i in range(1, training):
-    for k in range(n):
-        X[k, i] = spc.nonlin(K * X[k - m, i] + x[i] * map[k])
-        Y[k, i] = spc.nonlin(K * Y[k - m, i] + y[i] * map[k])
-        Z[k, i] = spc.nonlin(K * Z[k - m, i] + z[i] * map[k])
-
-x_target = data[0, washout:steps]
-y_target = data[1, washout:steps]
-z_target = data[2, washout:steps]
+    reservoir_state_matrix = np.reshape(reservoir[n * washout: n * steps], (training, n)).T
 
 
-Wout_x = np.linalg.lstsq(X.T, x_target.T, rcond=None)[0].T
-Wout_y = np.linalg.lstsq(Y.T, y_target.T, rcond=None)[0].T
-Wout_z = np.linalg.lstsq(Z.T, z_target.T, rcond=None)[0].T
+    target = data[:, washout:steps]
 
-print(np.shape(Wout_x))
+    Wout_x = np.linalg.lstsq(reservoir_state_matrix.T, target.T, rcond=None)[0].T
 
-X_pred = np.zeros((n, prediction))
-Y_pred = np.zeros((n, prediction))
-Z_pred = np.zeros((n, prediction))
-
-X_pred[:, 0] = X[:, -1]
-Y_pred[:, 0] = Y[:, -1]
-Z_pred[:, 0] = Z[:, -1]
+    # computation of the output matrix via Tikhonov regularization with regularization term beta (worse than numpy)
+    # beta = 1e-8
+    # Wout_x = target @ reservoir_state_matrix.T @ np.linalg.inv(reservoir_state_matrix @ reservoir_state_matrix.T + beta * np.identity(n))
 
 
-for i in range(1, prediction):
-    for k in range(n):
-        X_pred[k, i] = spc.nonlin(K * X_pred[k - m, i] + Wout_x @ X_pred[:, i - 1] * map[k])
-        Y_pred[k, i] = spc.nonlin(K * Y_pred[k - m, i] + Wout_y @ Y_pred[:, i - 1] * map[k])
-        Z_pred[k, i] = spc.nonlin(K * Z_pred[k - m, i] + Wout_z @ Z_pred[:, i - 1] * map[k])
+    print(np.linalg.norm(Wout_x @ reservoir_state_matrix - target))
+
+    #print(np.shape(Wout_x))
+    res_vec = reservoir_state_matrix.T[-1]
+    #print(reservoir_state_matrix, res_vec)
+    R = [res_vec]
+    k = 1
+    print(np.shape(coo))
+    for j in range(steps, steps + prediction):
+        print(Wout_x @ R[-1])
+        res_vec = np.empty(n)
+        d = Wout_x @ np.array(R[-1])
+        for i in range(n):
+            if i - m < 0:
+                res_vec[i] = spc.nonlin(K * R[-1][n + (i - m)] + d @ map[i, :])
+                #print(res_vec[i])
+            else:
+                res_vec[i] = spc.nonlin(K * res_vec[i - m] + d @ map[i, :])
+                #print(res_vec[i])
+        k += 1
+        R.append(res_vec)
+
+    #print(R)
+    R = np.array(R).T
+
+    #reservoir_state_matrix = np.reshape(reservoir[n * steps: n * (steps + prediction)], (prediction, n)).T
 
 
-coo = Wout_x @ X_pred, Wout_y @ Y_pred, Wout_z @ Z_pred
+    x = Wout_x @ R
+
+    norm = max(np.linalg.norm(x, axis=0))
+
 
 #plot of the lorenz system prediction
-ax.plot3D(*coo, 'red', label='esn prediction', linewidth=linewidth)
+ax.plot3D(*x, 'violet', label='esn prediction', linewidth=linewidth)
 
 ax.plot(*crit_pnt1, 'fuchsia', marker='o', markersize=2)
 ax.plot(*crit_pnt2, 'fuchsia', marker='o', markersize=2)
 
-
 plt.legend()
-
 plt.show()
-
-plt.figure()
-plt.plot(time, coo[0])
-plt.plot(time, coo[1])
-plt.plot(time, coo[2])
-
-
-
-plt.show()
-
