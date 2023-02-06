@@ -13,11 +13,11 @@ tmax = 20
 #values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 1000
-prediction_time = 100 #time unit
+prediction_time = 10 #time unit
 
 
 #leaking rate
-l = 1.0
+l = 0.3
 
 #spectral radius of W_r
 lmd = 10
@@ -102,8 +102,7 @@ while norm > 100 and count < 100:
                 Win[i][j] = 0
 
     #random adjacency matrix which connects some of the "reservoir points"
-    W_r = np.zeros((n, n), int)  # spc.random_adjacency_matrix(n, density, lmd)
-    np.fill_diagonal(W_r, 5)
+    W_r = spc.random_adjacency_matrix(n, density, lmd)
 
     for k in range(washout):
         r = (1 - l) * r + l * spc.act(Win @ data[:, k] + W_r @ r)
