@@ -30,7 +30,7 @@ crit_pnt1 = np.array([np.sqrt(c * (b - 1)), np.sqrt(c * (b - 1)), b - 1])
 crit_pnt2 = np.array([ - np.sqrt(c * (b - 1)), - np.sqrt(c * (b - 1)), b - 1])
 
 #initial value
-x0 = np.array([1.0, 0.0, 0.0])
+x0 = np.array([0.0, -1.0, -1.0])
 
 # computation of stepsizes
 steps = washout + training
@@ -63,7 +63,7 @@ ax.plot(*crit_pnt2, 'fuchsia', marker='o', markersize=2)
 ax.set_title('solution')
 
 #extend solution
-xnew = data[:, -1]
+xnew = data[:, -10]
 
 t = np.linspace(0, prediction_time, prediction + 1)
 sol = solve_ivp(spc.lorenz, (0, prediction_time), xnew, method='RK45', t_eval=t, args=(a, b, c))
@@ -127,7 +127,8 @@ while norm > 100 and count < 100:
     for j in range(steps, steps + prediction):
         print(Wout_x @ R[-1])
         res_vec = np.empty(n)
-        d = Wout_x @ np.array(R[-1])
+        #d = Wout_x @ np.array(R[-1])
+        d = coo[:, k - 1]
         for i in range(n):
             if i - m < 0:
                 res_vec[i] = spc.nonlin(K * R[-1][n + (i - m)] + d @ map[i, :])
@@ -148,6 +149,18 @@ while norm > 100 and count < 100:
 
     norm = max(np.linalg.norm(x, axis=0))
 
+    # computation of the error with respect to the right trajectory (2-norm)
+    error = []
+    nmse = 0
+    for i in range(prediction):
+        diff = np.linalg.norm(x[:, i] - coo[:, i - 1])
+        nmse = nmse + ((diff ** 2) / np.linalg.norm(coo[:, i - 1]) ** 2 )
+        error.append(diff)
+
+    nmse = (1/prediction) * nmse
+    print(nmse)
+
+
 
 #plot of the lorenz system prediction
 ax.plot3D(*x, 'violet', label='esn prediction', linewidth=linewidth)
@@ -156,4 +169,8 @@ ax.plot(*crit_pnt1, 'fuchsia', marker='o', markersize=2)
 ax.plot(*crit_pnt2, 'fuchsia', marker='o', markersize=2)
 
 plt.legend()
+#plt.show()
+
+plt.plot(np.arange(prediction), error)
 plt.show()
+print(error)
