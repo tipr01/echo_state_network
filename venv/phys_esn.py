@@ -6,20 +6,20 @@ import space as spc
 
 
 #reservoir size
-n = 100
+n = 500
 
 #timedomain
-tmax = 50
+tmax = 20
 
 #values of numbers of washout-, training -and prediction phase
-washout = 500
-training = 1000
-prediction_time = 10 #time unit
+washout = 50
+training = 500
+prediction_time = 2 #time unit
 
 #constant K
 K = 0.1
 
-# distance of steps we want to use from the past
+# delay
 m = n
 
 #lorenz system parameters
@@ -84,10 +84,10 @@ while norm > 100 and count < 100:
     count += 1
 
     map = np.random.uniform(-0.2, 0.2, size=(n, 3))
-    for i in range(n):
-        for j in range(3):
-            if np.random.random() < 2/3:
-                map[i][j] = 0
+    # for i in range(n):
+    #     for j in range(3):
+    #         if np.random.random() < 2/3:
+    #             map[i][j] = 0
 
     reservoir = np.zeros(n) # np.random.uniform(0, 1, size=n)
 
@@ -106,7 +106,6 @@ while norm > 100 and count < 100:
 
     reservoir_state_matrix = np.reshape(reservoir[n * washout: n * steps], (training, n)).T
 
-
     target = data[:, washout:steps]
 
     Wout_x = np.linalg.lstsq(reservoir_state_matrix.T, target.T, rcond=None)[0].T
@@ -120,14 +119,18 @@ while norm > 100 and count < 100:
 
     #print(np.shape(Wout_x))
     res_vec = reservoir_state_matrix.T[-1]
+    print(Wout_x @ res_vec, xnew)
     #print(reservoir_state_matrix, res_vec)
     R = [res_vec]
     k = 1
     print(np.shape(coo))
     for j in range(steps, steps + prediction):
-        print(Wout_x @ R[-1])
+        #print(Wout_x @ R[-1])
         res_vec = np.empty(n)
-        d = Wout_x @ np.array(R[-1])
+        if k == j % 5:
+           d = coo[:, k - 1]
+        else:
+           d = Wout_x @ np.array(R[-1])
         for i in range(n):
             if i - m < 0:
                 res_vec[i] = spc.nonlin(K * R[-1][n + (i - m)] + d @ map[i, :])
@@ -145,6 +148,7 @@ while norm > 100 and count < 100:
 
 
     x = Wout_x @ R
+    print(np.shape(x), np.shape(coo), prediction)
 
     norm = max(np.linalg.norm(x, axis=0))
 
