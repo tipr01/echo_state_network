@@ -4,6 +4,17 @@ import matplotlib.pyplot as plt
 import random
 
 
+
+
+#lorenz system parameters
+a, b, c = 10.0, 30.0, 2
+
+
+#critical points
+crit_pnt1 = np.array([np.sqrt(c * (b - 1)), np.sqrt(c * (b - 1)), b - 1])
+crit_pnt2 = np.array([ - np.sqrt(c * (b - 1)), - np.sqrt(c * (b - 1)), b - 1])
+
+
 #activation function
 def act(x):
     return np.tanh(x)
@@ -57,3 +68,45 @@ def nonlin(x):
 
 def test_func(x, b, normal, c):
     return 2 / np.pi * np.arctan(c * np.dot(normal, x - b))
+
+
+def washout(reservoir, washout, n, m, data, map, K, j):
+    for i in range(n, n * washout):
+        if i // n > j:
+            j += 1
+        k = i % n
+        reservoir = np.append(reservoir, nonlin(K * reservoir[i - m] + data[:, j].T @ map[k, :]))
+    return reservoir, j
+
+def training(reservoir, washout, steps, n, m, data, map, K, j):
+    for i in range(n * washout, n * steps):
+        if i // n > j:
+            j += 1
+        k = i % n
+        reservoir = np.append(reservoir, nonlin(K * reservoir[i - m] + data[:, j].T @ map[k, :]))
+    reservoir_state_matrix = np.reshape(reservoir[n * washout: n * steps], (steps - washout, n)).T
+    return reservoir_state_matrix
+
+
+def prediction(R, n, m, steps, prediction, j, res, Wout_x, K, map):
+    reservoir = res
+    d = Wout_x @ reservoir
+    for i in range(n, n * prediction):
+        if i // n > j:
+            j += 1
+            d = Wout_x @ np.array(reservoir[-n: ])
+            R.append(reservoir[-n: ])
+        k = i % n
+        print(np.shape(reservoir))
+        reservoir = np.append(reservoir, nonlin(K * reservoir[i - m] + d @ map[k, :]))
+    R = np.array(R).T
+    x = Wout_x @ R
+    return x
+
+
+
+
+
+
+
+

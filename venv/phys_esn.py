@@ -9,25 +9,21 @@ import space as spc
 n = 100
 
 #timedomain
-tmax = 50
+tmax = 22
 
 #values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 1000
-prediction_time = 10 #time unit
+prediction_time = 5 #time unit
 
 #constant K
-K = 0.1
+K = 1
 
 # distance of steps we want to use from the past
-m = n
+m = n // 2
 
 #lorenz system parameters
 a, b, c = 10.0, 30.0, 2
-
-#critical points
-crit_pnt1 = np.array([np.sqrt(c * (b - 1)), np.sqrt(c * (b - 1)), b - 1])
-crit_pnt2 = np.array([ - np.sqrt(c * (b - 1)), - np.sqrt(c * (b - 1)), b - 1])
 
 #initial value
 x0 = np.array([1.0, 0.0, 0.0])
@@ -45,20 +41,15 @@ time = np.array(sol.t)
 data = np.array(sol.y)
 x, y, z = data
 
-#print(data)
-
-
 #plot of the lorenz attractor
 linewidth = 0.8
 
 fig = plt.figure('lorenz system prediction', figsize=plt.figaspect(0.5))
-# manager =  plt.get_current_fig_manager()
 ax = fig.add_subplot(1, 2, 1, projection='3d')
 
 ax.plot3D(*data, 'blue', linewidth=linewidth)
-ax.plot(*crit_pnt1, 'fuchsia', marker='o', markersize=2)
-ax.plot(*crit_pnt2, 'fuchsia', marker='o', markersize=2)
-
+ax.plot(*spc.crit_pnt1, 'fuchsia', marker='o', markersize=2)
+ax.plot(*spc.crit_pnt2, 'fuchsia', marker='o', markersize=2)
 
 ax.set_title('solution')
 
@@ -83,30 +74,11 @@ count = 0
 while norm > 100 and count < 100:
     count += 1
 
-    map = np.random.uniform(-0.2, 0.2, size=(n, 3))
-    for i in range(n):
-        for j in range(3):
-            if np.random.random() < 2/3:
-                map[i][j] = 0
-
-    reservoir = np.zeros(n) # np.random.uniform(0, 1, size=n)
-
-    j = 1
-    for i in range(n, n * washout):
-        if i // n > j:
-            j += 1
-        k = i % n
-        reservoir = np.append(reservoir, spc.nonlin(K * reservoir[i - m] + data[:, j].T @ map[k, :]))
-
-    for i in range(n * washout, n * steps):
-        if i // n > j:
-            j += 1
-        k = i % n
-        reservoir = np.append(reservoir, spc.nonlin(K * reservoir[i - m] + data[:, j].T @ map[k, :]))
-
-    reservoir_state_matrix = np.reshape(reservoir[n * washout: n * steps], (training, n)).T
-
-
+    map = np.random.uniform(-0.02, 0.02, size=(n, 3))
+    print(np.shape(map[2, :]))
+    reservoir = np.random.uniform(0, 1, size=n)
+    reservoir, j = spc.washout(reservoir, washout, n, m, data, map, K, 1)
+    reservoir_state_matrix = spc.training(reservoir, washout, steps, n, m, data, map, K, j)
     target = data[:, washout:steps]
 
     Wout_x = np.linalg.lstsq(reservoir_state_matrix.T, target.T, rcond=None)[0].T
@@ -116,35 +88,10 @@ while norm > 100 and count < 100:
     # Wout_x = target @ reservoir_state_matrix.T @ np.linalg.inv(reservoir_state_matrix @ reservoir_state_matrix.T + beta * np.identity(n))
 
 
-    print(np.linalg.norm(Wout_x @ reservoir_state_matrix - target))
+    print('norm = ', np.linalg.norm(Wout_x @ reservoir_state_matrix - target))
 
-    #print(np.shape(Wout_x))
     res_vec = reservoir_state_matrix.T[-1]
-    #print(reservoir_state_matrix, res_vec)
-    R = [res_vec]
-    k = 1
-    print(np.shape(coo))
-    for j in range(steps, steps + prediction):
-        print(Wout_x @ R[-1])
-        res_vec = np.empty(n)
-        d = Wout_x @ np.array(R[-1])
-        for i in range(n):
-            if i - m < 0:
-                res_vec[i] = spc.nonlin(K * R[-1][n + (i - m)] + d @ map[i, :])
-                #print(res_vec[i])
-            else:
-                res_vec[i] = spc.nonlin(K * res_vec[i - m] + d @ map[i, :])
-                #print(res_vec[i])
-        k += 1
-        R.append(res_vec)
-
-    #print(R)
-    R = np.array(R).T
-
-    #reservoir_state_matrix = np.reshape(reservoir[n * steps: n * (steps + prediction)], (prediction, n)).T
-
-
-    x = Wout_x @ R
+    x = spc.prediction([], n, m, steps, prediction, 1, res_vec, Wout_x, K, map)
 
     norm = max(np.linalg.norm(x, axis=0))
 
@@ -152,8 +99,11 @@ while norm > 100 and count < 100:
 #plot of the lorenz system prediction
 ax.plot3D(*x, 'violet', label='esn prediction', linewidth=linewidth)
 
-ax.plot(*crit_pnt1, 'fuchsia', marker='o', markersize=2)
-ax.plot(*crit_pnt2, 'fuchsia', marker='o', markersize=2)
+ax.plot(*spc.crit_pnt1, 'fuchsia', marker='o', markersize=2)
+ax.plot(*spc.crit_pnt2, 'fuchsia', marker='o', markersize=2)
+ax.plot(*x[0], 'red', marker='o', markersize=2)
+ax.plot(*x[-1], 'black', marker='o', markersize=2)
+
 
 plt.legend()
 plt.show()

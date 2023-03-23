@@ -13,7 +13,7 @@ tmax = 20
 #values of numbers of washout-, training -and prediction phase
 washout = 500
 training = 1000
-prediction_time = 10 #time unit
+prediction_time = 20 #time unit
 
 
 #leaking rate
