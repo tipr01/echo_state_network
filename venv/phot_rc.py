@@ -26,36 +26,34 @@ def lorenz(t, xyz, a, b, c):
     return dxdt
 
 
-def nonlin(x):
-    return 40 * x / (1 + x/1)
 
-def state_mat(U, mask, delay, G, nonlin_fun=act, K=0.02):
+def nonlin(x):
+    return 40 * x / (1 + x)
+
+# def swing_fun(swing, m, K, delay_divisor, delay_remainder, G, nonlin_fun=nonlin):
+#     initial_state_matrix = np.zeros((swing, m))
+#     initial_state = np.random.uniform(0, 1, size=m)
+#     initial_state_matrix[0, :] = initial_state
+#
+#     for j in range(1, swing):
+#         for i in range(m):
+#             initial_state_matrix[j, i] = nonlin_fun(K * initial_state_matrix[j - delay_divisor, i - delay_remainder] + G)
+#
+#     return initial_state_matrix[-1, :]
+
+def state_mat(U, mask, delay, G, K, nonlin_fun=nonlin):
     m = mask.shape[0]
     length = U.shape[0]
-    swing = 100
-    S = np.zeros((length, m))
+    S = np.ones((length, m + 1))
     delay_divisor = delay // m
     delay_remainder = delay % m
-
-    initial_state_matrix = np.zeros((swing, m))
-    initial_state = np.random.uniform(0, 1, size=m)
-    initial_state_matrix[0, :] = initial_state
-
-    for j in range(swing):
-        for i in range(m):
-            if j * m + i - delay >= 0:
-                initial_state_matrix[j, i] = nonlin_fun(K * initial_state_matrix[j - delay_divisor, i - delay_remainder] + G * mask[i])
-
-    S[0, :] = initial_state_matrix[-1, :]
 
     for j in range(1, length):
         for i in range(m):
             S[j, i] = nonlin_fun(K * S[j - delay_divisor, i - delay_remainder] + G * mask[i] * U[j])
-
-    #S = np.concatenate((S, np.ones(length).reshape((length, 1))), axis=1)
     return S
 
-def state_mat_multi_data(data, mask, delay, G, nonlin_fun=act, K=0.02):
+def state_mat_multi_data(data, mask, delay, G, K=0.02, nonlin_fun=nonlin):
     m = mask.shape[0]
     length = data.shape[1]
     swing = 100
@@ -80,25 +78,20 @@ def state_mat_multi_data(data, mask, delay, G, nonlin_fun=act, K=0.02):
     #S = np.concatenate((S, np.ones(length).reshape((length, 1))), axis=1)
     return S
 
-
-
-
-def state_mat_autoregr(initialization, init_vec, W, mask, delay, anz, G, pred, nonlin_fun=act, K=0.02):
+def state_mat_autoregr(initialization, init_vec, W, mask, delay, anz, G, nonlin_fun=nonlin, K=0.02):
     m = mask.shape[0]
     length = anz
-    S = np.zeros((length, m))
-    S[0, :] = init_vec
+    S = np.ones((length, m + 1))
     delay_divisor = delay // m
     delay_remainder = delay % m
 
-    #d = initialization
+    #S[0, :] = swing_fun(swing, m, K, delay_divisor, delay_remainder, G)
+    S[0, :] = init_vec
+    d = initialization
     for j in range(1, length):
-        # if j % 1 == 0:
-        #     d = pred[j]
-        # else:
-        d = S[j - 1, :] @ W
         for i in range(m):
             S[j, i] = nonlin_fun(K * S[j - delay_divisor, i - delay_remainder] + G * mask[i] * d)
+        d = S[j, :] @ W
     return S
 
 
@@ -109,14 +102,13 @@ def tikhonov(S, target, beta=5e-6):
     n = np.shape(S)[1]
     return np.linalg.lstsq(S.T @ S + beta * np.identity(n), S.T @ target, rcond=None)[0]
 
-training = 10000
-washout = int(training * 0.1)
+datasize = 35000
 
 # discretization
 dt = 0.02
 
 #timedomain
-tmax = int(training * dt)
+tmax = int(datasize * dt)
 
 #initial value
 x0 = np.array([1.0, 0.0, 0.0])
@@ -124,7 +116,6 @@ x0 = np.array([1.0, 0.0, 0.0])
 #time series stepsize
 stepsize = 1e-3
 steps = int(tmax / stepsize)
-
 
 #timeaxis
 t = np.linspace(0, tmax, steps)
@@ -134,19 +125,29 @@ sol = solve_ivp(lorenz, (0, tmax), x0, method='RK45', t_eval=t, args=(a, b, c))
 time = np.array(sol.t)
 data = np.array(sol.y)
 
-file = 'coordinate_data.mat'
-scipy.io.savemat(file, mdict={'out': data}, oned_as='row')
+indices = [int(steps / datasize * i) for i in range(datasize)]
+x, y, z = data
+xnew = np.take(x, indices)
+ynew = np.take(y, indices)
+znew = np.take(z, indices)
 
-#timeaxis
-t = np.linspace(0, tmax, steps)
+data_new = xnew, ynew, znew
+
+file = 'coordinate_data.mat'
+scipy.io.savemat(file, mdict={'out': data_new}, oned_as='row')
 
 # python solved prediction
 sol = solve_ivp(lorenz, (0, tmax), data[:, -1], method='RK45', t_eval=t, args=(a, b, c))
 time_pred = np.array(sol.t)
 pred = np.array(sol.y)
 
+indices = [int(steps / datasize * i) for i in range(datasize)]
+x, y, z = pred
+xnew = np.take(x, indices)
+ynew = np.take(y, indices)
+znew = np.take(z, indices)
+
+pred_new = xnew, ynew, znew
+
 file = 'coordinate_pred.mat'
-scipy.io.savemat(file, mdict={'out': pred}, oned_as='row')
-
-
-
+scipy.io.savemat(file, mdict={'out': pred_new}, oned_as='row')
